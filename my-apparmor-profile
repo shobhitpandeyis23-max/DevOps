@@ -1,0 +1,20 @@
+#include <tunables/global>
+
+profile my-apparmor-profile flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network inet tcp,
+  network inet udp,
+
+  # Deny raw sockets and shell execution
+  deny network raw,
+  deny /bin/sh mr,
+  deny /bin/bash mr,
+
+  # Allow necessary app and python library access
+  /app/** r,
+  /usr/local/bin/python* ix,
+  /usr/local/lib/** mr,
+  /etc/hosts r,
+  /etc/resolv.conf r,
+}
