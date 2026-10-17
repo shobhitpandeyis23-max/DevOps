@@ -1,0 +1,84 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Build') {
+            steps {
+                echo 'Installing Flask dependencies...'
+                dir('Exercise-9') {
+                    sh '''
+                        docker run --rm \
+                          -v "$PWD":/app \
+                          -w /app \
+                          python:3.11-slim \
+                          sh -c "pip install --no-cache-dir -r requirements.txt"
+                    '''
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo 'Running unit tests...'
+                dir('Exercise-9') {
+                    sh '''
+                        docker run --rm \
+                          -v "$PWD":/app \
+                          -w /app \
+                          python:3.11-slim \
+                          sh -c "pip install --no-cache-dir -r requirements.txt && python -m unittest test_app.py"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo 'Copying application to mock deployment directory...'
+                sh '''
+                    rm -rf "$WORKSPACE/python-app-deploy"
+                    mkdir -p "$WORKSPACE/python-app-deploy"
+                    cp "$WORKSPACE/Exercise-9/app.py" "$WORKSPACE/python-app-deploy/"
+                    cp "$WORKSPACE/Exercise-9/requirements.txt" "$WORKSPACE/python-app-deploy/"
+                '''
+            }
+        }
+
+        stage('Run Application') {
+            steps {
+                echo 'Starting deployed Flask application...'
+                sh '''
+                    docker rm -f exercise9-flask 2>/dev/null || true
+                    docker run -d --name exercise9-flask --network host \
+                      -v "$WORKSPACE/python-app-deploy:/app:ro" \
+                      -w /app \
+                      python:3.11-slim \
+                      sh -c "pip install --no-cache-dir -r requirements.txt && python app.py"
+                    sleep 5
+                '''
+            }
+        }
+
+        stage('Test Application') {
+            steps {
+                echo 'Checking the deployed application...'
+                sh '''
+                    docker run --rm --network host python:3.11-slim \
+                      python -c "from urllib.request import urlopen; body = urlopen('http://localhost:5000/').read().decode(); print(body); assert body == 'Hello, Jenkins Multi-Stage Pipeline!'"
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker rm -f exercise9-flask 2>/dev/null || true'
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check the console output.'
+        }
+    }
+}
