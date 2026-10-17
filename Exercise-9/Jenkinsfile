@@ -1,3 +1,4 @@
+// Exercise 9 multi-stage Flask pipeline
 pipeline {
     agent any
 
