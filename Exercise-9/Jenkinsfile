@@ -1,19 +1,12 @@
-// Exercise 9 multi-stage Flask pipeline
 pipeline {
     agent any
 
     stages {
         stage('Build') {
             steps {
-                echo 'Installing Flask dependencies...'
+                echo 'Building the Flask application image...'
                 dir('Exercise-9') {
-                    sh '''
-                        docker run --rm \
-                          -v "$PWD":/app \
-                          -w /app \
-                          python:3.11-slim \
-                          sh -c "pip install --no-cache-dir -r requirements.txt"
-                    '''
+                    sh 'docker build -t exercise9-app .'
                 }
             }
         }
@@ -21,21 +14,13 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Running unit tests...'
-                dir('Exercise-9') {
-                    sh '''
-                        docker run --rm \
-                          -v "$PWD":/app \
-                          -w /app \
-                          python:3.11-slim \
-                          sh -c "pip install --no-cache-dir -r requirements.txt && python -m unittest test_app.py"
-                    '''
-                }
+                sh 'docker run --rm --entrypoint python exercise9-app -m unittest test_app.py'
             }
         }
 
         stage('Deploy') {
             steps {
-                echo 'Copying application to mock deployment directory...'
+                echo 'Copying application to the mock deployment directory...'
                 sh '''
                     rm -rf "$WORKSPACE/python-app-deploy"
                     mkdir -p "$WORKSPACE/python-app-deploy"
@@ -47,14 +32,10 @@ pipeline {
 
         stage('Run Application') {
             steps {
-                echo 'Starting deployed Flask application...'
+                echo 'Starting the deployed Flask application...'
                 sh '''
                     docker rm -f exercise9-flask 2>/dev/null || true
-                    docker run -d --name exercise9-flask --network host \
-                      -v "$WORKSPACE/python-app-deploy:/app:ro" \
-                      -w /app \
-                      python:3.11-slim \
-                      sh -c "pip install --no-cache-dir -r requirements.txt && python app.py"
+                    docker run -d --name exercise9-flask --network host exercise9-app
                     sleep 5
                 '''
             }
@@ -62,10 +43,10 @@ pipeline {
 
         stage('Test Application') {
             steps {
-                echo 'Checking the deployed application...'
+                echo 'Checking the deployed Flask application...'
                 sh '''
                     docker run --rm --network host python:3.11-slim \
-                      python -c "from urllib.request import urlopen; body = urlopen('http://localhost:5000/').read().decode(); print(body); assert body == 'Hello, Jenkins Multi-Stage Pipeline!'"
+                    python -c "from urllib.request import urlopen; body = urlopen('http://localhost:5000/').read().decode(); print(body); assert body == 'Hello, Jenkins Multi-Stage Pipeline!'"
                 '''
             }
         }
