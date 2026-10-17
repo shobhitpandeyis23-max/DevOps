@@ -1,0 +1,30 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Check Docker') {
+            steps {
+                sh 'docker --version'
+                sh 'docker info > /dev/null'
+            }
+        }
+
+        stage('Build Metrics Image') {
+            steps {
+                sh 'docker build -t delivery-metrics-ci /workspace'
+            }
+        }
+
+        stage('Validate Application') {
+            steps {
+                sh 'docker run --rm --entrypoint python delivery-metrics-ci -m py_compile delivery_metrics.py'
+            }
+        }
+
+        stage('Verify Monitoring Stack') {
+            steps {
+                sh 'docker ps --format "{{.Names}}" | grep -E "prometheus|grafana|delivery-metrics"'
+            }
+        }
+    }
+}
